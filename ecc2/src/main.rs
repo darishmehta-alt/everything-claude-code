@@ -1,3 +1,4 @@
+mod auth;
 mod comms;
 mod config;
 mod notifications;
@@ -562,14 +563,11 @@ enum RemoteCommands {
         #[arg(long)]
         json: bool,
     },
-    /// Serve a token-authenticated remote dispatch intake endpoint
+    /// Serve an OAuth-authenticated remote dispatch intake endpoint
     Serve {
         /// Address to bind, for example 127.0.0.1:8787
         #[arg(long, default_value = "127.0.0.1:8787")]
         bind: String,
-        /// Bearer token required for POST /dispatch
-        #[arg(long)]
-        token: String,
     },
 }
 
@@ -2699,8 +2697,8 @@ async fn main() -> Result<()> {
                     }
                 }
             }
-            RemoteCommands::Serve { bind, token } => {
-                run_remote_dispatch_server(&db, &cfg, &bind, &token)?;
+            RemoteCommands::Serve { bind } => {
+                run_remote_dispatch_server(&db, &cfg, &bind)?;
             }
         },
         Some(Commands::Daemon) => {
@@ -3792,17 +3790,20 @@ fn run_remote_dispatch_server(
     db: &session::store::StateStore,
     cfg: &config::Config,
     bind_addr: &str,
-    bearer_token: &str,
 ) -> Result<()> {
+    let creds = crate::auth::load_credentials().map_err(|e| {
+        anyhow::anyhow!("Auth error: {}. Run 'ecc login' first.", e)
+    })?;
+
     let listener = TcpListener::bind(bind_addr)
         .with_context(|| format!("Failed to bind remote dispatch server on {bind_addr}"))?;
-    println!("Remote dispatch server listening on http://{bind_addr}");
+    println!("Remote dispatch server listening on http://{bind_addr} (authenticated as {})", creds.github_login);
 
     for stream in listener.incoming() {
         match stream {
             Ok(mut stream) => {
                 if let Err(error) =
-                    handle_remote_dispatch_connection(&mut stream, db, cfg, bearer_token)
+                    handle_remote_dispatch_connection(&mut stream, db, cfg, &creds)
                 {
                     let _ = write_http_response(
                         &mut stream,
@@ -3826,7 +3827,7 @@ fn handle_remote_dispatch_connection(
     stream: &mut TcpStream,
     db: &session::store::StateStore,
     cfg: &config::Config,
-    bearer_token: &str,
+    creds: &crate::auth::OAuthCredentials,
 ) -> Result<()> {
     let (method, path, headers, body) = read_http_request(stream)?;
     match (method.as_str(), path.as_str()) {
@@ -3841,8 +3842,8 @@ fn handle_remote_dispatch_connection(
                 .get("authorization")
                 .map(String::as_str)
                 .unwrap_or_default();
-            let expected = format!("Bearer {bearer_token}");
-            if auth != expected {
+            let provided = auth.strip_prefix("Bearer ").unwrap_or("");
+            if !crate::auth::validate_bearer(provided, creds) {
                 return write_http_response(
                     stream,
                     401,
@@ -3918,8 +3919,8 @@ fn handle_remote_dispatch_connection(
                 .get("authorization")
                 .map(String::as_str)
                 .unwrap_or_default();
-            let expected = format!("Bearer {bearer_token}");
-            if auth != expected {
+            let provided = auth.strip_prefix("Bearer ").unwrap_or("");
+            if !crate::auth::validate_bearer(provided, creds) {
                 return write_http_response(
                     stream,
                     401,
@@ -7173,13 +7174,13 @@ fn build_legacy_migration_plan_report(
                 source_paths: artifact.source_paths.clone(),
                 command_snippets: if remote_commands.is_empty() {
                     vec![
-                        "ecc remote serve --bind 127.0.0.1:8787 --token <token>".to_string(),
+                        "ecc remote serve --bind 127.0.0.1:8787".to_string(),
                         "ecc remote add --task \"Translate legacy dispatch workflow\"".to_string(),
                         "ecc remote computer-use --goal \"Translate legacy browser/operator flow\"".to_string(),
                     ]
                 } else {
                     let mut commands = vec![
-                        "ecc remote serve --bind 127.0.0.1:8787 --token <token>".to_string(),
+                        "ecc remote serve --bind 127.0.0.1:8787".to_string(),
                     ];
                     commands.extend(remote_commands.clone());
                     commands.push("ecc remote list".to_string());

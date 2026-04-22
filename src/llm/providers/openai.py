@@ -8,6 +8,7 @@ from typing import Any
 
 from openai import OpenAI
 
+from llm.core.auth import load_credentials
 from llm.core.interface import (
     AuthenticationError,
     ContextLengthError,
@@ -21,6 +22,7 @@ class OpenAIProvider(LLMProvider):
     provider_type = ProviderType.OPENAI
 
     def __init__(self, api_key: str | None = None, base_url: str | None = None) -> None:
+        load_credentials()
         self.client = OpenAI(api_key=api_key or os.environ.get("OPENAI_API_KEY"), base_url=base_url)
         self._models = [
             ModelInfo(

@@ -49,6 +49,18 @@ const COMMANDS = {
     script: 'uninstall.js',
     description: 'Remove ECC-managed files recorded in install-state',
   },
+  login: {
+    script: 'ecc-login.js',
+    description: 'Authenticate with GitHub (OAuth Device Flow)',
+  },
+  logout: {
+    script: 'ecc-logout.js',
+    description: 'Remove stored GitHub credentials',
+  },
+  whoami: {
+    script: 'ecc-whoami.js',
+    description: 'Show current GitHub authentication status',
+  },
 };
 
 const PRIMARY_COMMANDS = [
@@ -62,6 +74,9 @@ const PRIMARY_COMMANDS = [
   'sessions',
   'session-inspect',
   'uninstall',
+  'login',
+  'logout',
+  'whoami',
 ];
 
 function showHelp(exitCode = 0) {

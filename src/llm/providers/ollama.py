@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from llm.core.auth import load_credentials
 from llm.core.interface import (
     AuthenticationError,
     ContextLengthError,
@@ -22,6 +23,7 @@ class OllamaProvider(LLMProvider):
         base_url: str | None = None,
         default_model: str | None = None,
     ) -> None:
+        load_credentials()
         self.base_url = base_url or os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
         self.default_model = default_model or os.environ.get("OLLAMA_MODEL", "llama3.2")
         self._models = [

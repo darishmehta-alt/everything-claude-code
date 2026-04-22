@@ -7,6 +7,7 @@ from typing import Any
 
 from anthropic import Anthropic
 
+from llm.core.auth import load_credentials
 from llm.core.interface import (
     AuthenticationError,
     ContextLengthError,
@@ -20,6 +21,7 @@ class ClaudeProvider(LLMProvider):
     provider_type = ProviderType.CLAUDE
 
     def __init__(self, api_key: str | None = None, base_url: str | None = None) -> None:
+        load_credentials()
         self.client = Anthropic(api_key=api_key or os.environ.get("ANTHROPIC_API_KEY"), base_url=base_url)
         self._models = [
             ModelInfo(
